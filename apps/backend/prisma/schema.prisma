@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────
+
+enum MatchStatus {
+  SCHEDULED
+  TIMED
+  IN_PLAY
+  PAUSED
+  HALF_TIME
+  EXTRA_TIME
+  PENALTY_SHOOTOUT
+  FINISHED
+  SUSPENDED
+  POSTPONED
+  CANCELLED
+}
+
+enum Phase {
+  GROUP_STAGE
+  ROUND_OF_32
+  ROUND_OF_16
+  QUARTER_FINAL
+  SEMI_FINAL
+  THIRD_PLACE
+  FINAL
+}
+
+enum EventType {
+  GOAL
+  OWN_GOAL
+  PENALTY_GOAL
+  PENALTY_MISS
+  YELLOW_CARD
+  RED_CARD
+  SECOND_YELLOW
+  SUBSTITUTION
+  VAR_DECISION
+}
+
+// ─── Models ─────────────────────────────────────────
+
+model Stadium {
+  id       Int     @id @default(autoincrement())
+  name     String  @db.VarChar(255)
+  city     String  @db.VarChar(100)
+  country  String  @db.VarChar(100)
+  capacity Int
+  imageUrl String? @db.VarChar(500)
+
+  matches Match[]
+
+  @@map("stadiums")
+}
+
+model Team {
+  id            Int     @id @default(autoincrement())
+  name          String  @db.VarChar(100)
+  code          String  @unique @db.VarChar(3)
+  flagUrl       String? @db.VarChar(500)
+  confederation String  @db.VarChar(20)
+  groupId       Int?
+
+  group      Group?          @relation(fields: [groupId], references: [id])
+  standings  GroupStanding[]
+  homeMatches Match[]        @relation("HomeTeam")
+  awayMatches Match[]        @relation("AwayTeam")
+  events     MatchEvent[]
+
+  @@index([groupId])
+  @@map("teams")
+}
+
+model Group {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(2)
+
+  teams     Team[]
+  standings GroupStanding[]
+  matches   Match[]
+
+  @@map("groups")
+}
+
+model GroupStanding {
+  id             Int @id @default(autoincrement())
+  groupId        Int
+  teamId         Int
+  played         Int @default(0)
+  won            Int @default(0)
+  drawn          Int @default(0)
+  lost           Int @default(0)
+  goalsFor       Int @default(0)
+  goalsAgainst   Int @default(0)
+  goalDifference Int @default(0)
+  points         Int @default(0)
+
+  group Group @relation(fields: [groupId], references: [id])
+  team  Team  @relation(fields: [teamId], references: [id])
+
+  @@unique([groupId, teamId])
+  @@index([groupId])
+  @@index([teamId])
+  @@map("group_standings")
+}
+
+model Match {
+  id             Int         @id @default(autoincrement())
+  externalId     String?     @unique @db.VarChar(50)
+  phase          Phase
+  groupId        Int?
+  matchDay       Int?
+  dateUtc        DateTime
+  stadiumId      Int?
+  homeTeamId     Int?
+  awayTeamId     Int?
+  homeScore      Int?
+  awayScore      Int?
+  homePenalties  Int?
+  awayPenalties  Int?
+  status         MatchStatus @default(SCHEDULED)
+  minute         Int?
+
+  group    Group?       @relation(fields: [groupId], references: [id])
+  stadium  Stadium?     @relation(fields: [stadiumId], references: [id])
+  homeTeam Team?        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team?        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  events   MatchEvent[]
+
+  @@index([phase])
+  @@index([status])
+  @@index([dateUtc])
+  @@index([groupId])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@map("matches")
+}
+
+model MatchEvent {
+  id          Int       @id @default(autoincrement())
+  matchId     Int
+  type        EventType
+  minute      Int
+  extraMinute Int?
+  teamId      Int?
+  playerName  String?   @db.VarChar(100)
+  detail      String?   @db.VarChar(255)
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team  Team? @relation(fields: [teamId], references: [id])
+
+  @@index([matchId])
+  @@index([teamId])
+  @@map("match_events")
+}
